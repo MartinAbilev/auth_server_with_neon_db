@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home</title>
+</head>
+<body>
+  <h1 id="welcome-message">Welcome Hom!</h1>
+  <p>This is the home page for authorized users.</p>
+  <p><a href="/logout">Logout</a></p>
+
+  <script>
+    // Function to decode Base64 JSON Web Token
+    function decodeToken(token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[0])); // Decode Base64
+        return payload;
+      } catch (err) {
+        console.error('Invalid token:', err);
+        return null;
+      }
+    }
+
+    // Get the token from the cookies
+    function getAuthToken() {
+      const cookies = document.cookie.split('; ');
+      console.log('cookies', cookies)
+      for (let cookie of cookies) {
+        const [name, value] = cookie.split('=');
+        if (name === 'authToken') {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    // Display the username in the welcome message
+    const token = getAuthToken();
+    if (token)
+    {
+      console.log('token found')
+      const decoded = decodeToken(token);
+      if (decoded && decoded.username) {
+        document.getElementById('welcome-message').textContent = `Welcome Homez, ${decoded.username}!`;
+      }
+    }
+    else
+    {
+      console.log('token not found!!!')
+    }
+  </script>
+</body>
+</html>

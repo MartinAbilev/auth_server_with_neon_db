@@ -1,0 +1,96 @@
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const app = express();
+const PORT = 3333;
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(express.static('public'));
+
+// Initialize PostgreSQL Pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// In-memory store for logged-in users
+const usersLogged = {};
+
+// Helper function to validate token
+async function authenticateToken(req, res, next) {
+  const token = req.cookies.authToken;
+  if (!token) return res.redirect('/login.html');
+
+  try {
+    const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
+
+    // Check if the user ID exists in the logged-in cache
+    if (!usersLogged[decoded.id]) return res.redirect('/login.html');
+
+    req.user = { id: decoded.id, username: decoded.username };
+    next();
+  } catch {
+    res.redirect('/login.html');
+  }
+}
+
+// Routes
+app.get('/', authenticateToken, (req, res) => {
+  res.sendFile(__dirname + '/public/home.html');
+});
+app.get('/home', authenticateToken, (req, res) => {
+  res.sendFile(__dirname + '/public/home.html');
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const email = username
+  try {
+    // Query the database for the user
+    const result = await pool.query(
+      'SELECT id, name FROM users WHERE email = $1 AND password = $2',
+      [username, password]
+    );
+
+    if (result.rowCount > 0) {
+      const user = result.rows[0];
+      console.log('USER loged in', user.id, user.name)
+      // Generate token and add user to the logged-in cache
+      const token = Buffer.from(JSON.stringify({ id: user.id, username: user.name })).toString('base64');
+      usersLogged[user.id] = Date.now(); // Store the login timestamp
+
+      res.cookie('authToken', token, { httpOnly: false });
+      res.redirect('/home');
+    } else {
+      res.redirect('/login.html?error=Invalid credentials');
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.get('/logout', (req, res) => {
+  const token = req.cookies.authToken;
+
+  if (token) {
+    try {
+      const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
+
+      // Remove the user from the logged-in cache
+      delete usersLogged[decoded.id];
+    } catch {
+      console.error('Invalid token during logout.');
+    }
+  }
+
+  res.clearCookie('authToken');
+  res.redirect('/login.html');
+});
+
+// Start server
+app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
