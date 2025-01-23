@@ -36,21 +36,34 @@
     }
 
     // Display the username in the welcome message
+    function fetchUserData() {
     const token = getAuthToken();
-    if (token)
-    {
-      console.log('token found')
+    if (token) {
       const decoded = decodeToken(token);
-      if (decoded)
-      {
-        console.log('decoded token', decoded)
-        document.getElementById('welcome-message').textContent = `Welcome Homez, ${decoded.username}!`;
+      if (decoded && decoded.sessionId) {
+        // Fetch user data from server
+        fetch('/get-user-data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sessionId: decoded.sessionId }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.username) {
+              document.getElementById('welcome-message').textContent = `Welcome Home, ${data.username}!`;
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching user data:', error);
+          });
       }
     }
-    else
-    {
-      console.log('token not found!!!')
-    }
+  }
+
+  // Call the function to fetch and display user data when the page loads
+  window.onload = fetchUserData;
   </script>
 </body>
 </html>

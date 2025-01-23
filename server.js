@@ -84,6 +84,20 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Route to fetch user data based on session ID
+app.post('/get-user-data', authenticateToken, (req, res) => {
+  const session = usersLogged[req.user.sessionId];
+  if (!session) {
+    return res.status(401).send({ message: 'Session expired or invalid.' });
+  }
+
+  res.send({
+    userId: session.userId,
+    username: session.username,
+    timestamp: session.timestamp,
+  });
+});
+
 app.get('/logout', (req, res) => {
   const token = req.cookies.authToken;
 
