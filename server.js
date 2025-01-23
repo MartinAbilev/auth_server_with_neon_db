@@ -1,7 +1,8 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { Pool } = require('pg');
-const uuid = require('uuid');  // Use UUID for session IDs
+const uuid = require('uuid');
+const bcrypt = require('bcrypt');
 
 require('dotenv').config();
 
@@ -45,18 +46,19 @@ async function authenticateToken(req, res, next) {
 app.get('/', authenticateToken, (req, res) => {
   res.sendFile(__dirname + '/public/home.html');
 });
+
 app.get('/home', authenticateToken, (req, res) => {
   res.sendFile(__dirname + '/public/home.html');
 });
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const email = username
+
   try {
     // Query the database for the user
     const result = await pool.query(
-      'SELECT id, name FROM users WHERE email = $1 AND password = $2',
-      [username, password]
+      'SELECT id, name, password FROM users WHERE email = $1',
+      [username]
     );
 
     if (result.rowCount > 0) {
@@ -65,16 +67,31 @@ app.post('/login', async (req, res) => {
       // Generate a unique session ID
       const sessionId = uuid.v4();
 
-      console.log('USER loged in', user.id, user.name, 'sessionid', sessionId)
-      // Generate token and add user to the logged-in cache
-      // Store session ID with userId and timestamp
-      usersLogged[sessionId] = { sessionId: sessionId, username: user.name, timestamp: Date.now() };
+      console.log('USER logged in', user.id, user.name, 'sessionid', sessionId, 'password', user.password);
 
-      // Generate token with sessionId
-      const token = Buffer.from(JSON.stringify(usersLogged[sessionId])).toString('base64');
+      // Hashing the password from the database with the entered password
+      const isPass = await bcrypt.compare(password, user.password);
 
-      res.cookie('authToken', token, { httpOnly: false });
-      res.redirect('/home');
+      console.log('passwords match', isPass);
+
+      if (isPass) {
+        // Generate token and add user to the logged-in cache
+        // Store session ID with userId and username
+        usersLogged[sessionId] = {
+          sessionId: sessionId,
+          userId: user.id, // Store userId in session
+          username: user.name,
+          timestamp: Date.now(),
+        };
+
+        // Generate token with sessionId
+        const token = Buffer.from(JSON.stringify(usersLogged[sessionId])).toString('base64');
+
+        res.cookie('authToken', token, { httpOnly: false });
+        res.redirect('/home');
+      } else {
+        res.redirect('/login.html?error=Invalid credentials');
+      }
     } else {
       res.redirect('/login.html?error=Invalid credentials');
     }
@@ -106,7 +123,7 @@ app.get('/logout', (req, res) => {
       const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
 
       // Remove the user from the logged-in cache
-      delete usersLogged[decoded.id];
+      delete usersLogged[decoded.sessionId];
     } catch {
       console.error('Invalid token during logout.');
     }
