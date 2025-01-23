@@ -41,7 +41,9 @@
     {
       console.log('token found')
       const decoded = decodeToken(token);
-      if (decoded && decoded.username) {
+      if (decoded)
+      {
+        console.log('decoded token', decoded)
         document.getElementById('welcome-message').textContent = `Welcome Homez, ${decoded.username}!`;
       }
     }

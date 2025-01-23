@@ -1,6 +1,8 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { Pool } = require('pg');
+const uuid = require('uuid');  // Use UUID for session IDs
+
 require('dotenv').config();
 
 const app = express();
@@ -28,10 +30,11 @@ async function authenticateToken(req, res, next) {
   try {
     const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
 
-    // Check if the user ID exists in the logged-in cache
-    if (!usersLogged[decoded.id]) return res.redirect('/login.html');
+    // Check if the session ID exists in the logged-in cache
+    const session = usersLogged[decoded.sessionId];
+    if (!session) return res.redirect('/login.html');
 
-    req.user = { id: decoded.id, username: decoded.username };
+    req.user = { id: session.userId, sessionId: decoded.sessionId };
     next();
   } catch {
     res.redirect('/login.html');
@@ -58,10 +61,17 @@ app.post('/login', async (req, res) => {
 
     if (result.rowCount > 0) {
       const user = result.rows[0];
-      console.log('USER loged in', user.id, user.name)
+
+      // Generate a unique session ID
+      const sessionId = uuid.v4();
+
+      console.log('USER loged in', user.id, user.name, 'sessionid', sessionId)
       // Generate token and add user to the logged-in cache
-      const token = Buffer.from(JSON.stringify({ id: user.id, username: user.name })).toString('base64');
-      usersLogged[user.id] = Date.now(); // Store the login timestamp
+      // Store session ID with userId and timestamp
+      usersLogged[sessionId] = { sessionId: sessionId, username: user.name, timestamp: Date.now() };
+
+      // Generate token with sessionId
+      const token = Buffer.from(JSON.stringify(usersLogged[sessionId])).toString('base64');
 
       res.cookie('authToken', token, { httpOnly: false });
       res.redirect('/home');
